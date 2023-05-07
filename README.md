@@ -1,5 +1,5 @@
 # dns-homework-otus
-<h3>1. Работа со стендом и настройка DNS</h3>
+<h2>1. Работа со стендом и настройка DNS</h2>
 добавить еще один сервер client2
 
 добавил в Vagrantfile:
@@ -198,13 +198,57 @@ web1            IN      A       192.168.50.15
 chown root:named /etc/named/named.dns.lab.client
 chmod 660 /etc/named/named.dns.lab.client
 ```
+2) Вношу изменения в файл /etc/named.conf на хостах ns01 и ns02<br>
+генерирую ключи для хостов client и client2<br>
 
+```bash
+[root@ns01 ~]# tsig-keygen
+key "tsig-key" {
+	algorithm hmac-sha256;
+	secret "IxAIDfcewAtWxE5NnD54HBwXvX4EFThcW1o0DqL15oI=";
+};
+[root@ns01 ~]#
+```
+добавляю ключи в блок access файла /etc/named.conf
 
+```bash
+#Описание ключа для хоста client
+key "client-key" {
+    algorithm hmac-sha256;
+    secret "IQg171Ht4mdGYcjjYKhI9gSc1fhoxzHZB+h2NMtyZWY=";
+};
+#Описание ключа для хоста client2
+key "client2-key" {
+    algorithm hmac-sha256;
+    secret "m7r7SpZ9KBcA4kOl1JHQQnUiIlpQA1IJ9xkBHwdRAHc=";
+};
+#Описание access-листов
+acl client { !key client2-key; key client-key; 192.168.50.15; };
+acl client2 { !key client-key; key client2-key; 192.168.50.16; };
+```
 
+В данном блоке access листов мы выделяем 2 блока: <br>
+    • client имеет адрес 192.168.50.15, использует client-key и не использует client2-key<br>
+    • client2 имеет адрес 192ю168.50.16, использует clinet2-key и не использует client-key<br>
 
-    • завести в зоне dns.lab имена:
-        ◦ web1 - смотрит на клиент1
-        ◦ web2  смотрит на клиент2
-    • завести еще одну зону newdns.lab
-    • завести в ней запись
-        ◦ www - смотрит на обоих клиентов
+Далее создаю на мастере файл с настройками зоны dns.lab для client /etc/named/named.dns.lab.client
+(файл в плейбуке)<br>
+
+вношу правки в /etc/named.conf<br>
+
+Технология Split-DNS реализуется с помощью описания представлений (view), для каждого отдельного acl. В каждое представление (view) добавляются только те зоны, которые разрешено видеть хостам, адреса которых указаны в access листе.<br>
+
+Все ранее описанные зоны должны быть перенесены в модули view. Вне view зон быть недолжно, зона any должна всегда находиться в самом низу. <br>
+в плейбуке этот файл:
+master-named.conf<br>
+
+Для слейва файл различается тем что в нем размещены указания брать информацию с мастера<br>
+slave-named.conf<br>
+для проверки настроек можно использовать утилиту named-checkconf<br>
+
+указываю машинам client client2 использовать ns01 ns02 в качестве dns серверов путем добавления их в /etc/resolve.conf<br>
+
+перезагружаю ns01 ns02<br>
+проверяю на клиентах результат:<br>
+<img src="./screenshots/client_final_check.png"></img>
+<img src="./screenshots/client2_final_check.png"></img>
